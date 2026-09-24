@@ -7,6 +7,7 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
 import java.io.Closeable
+import java.io.InputStream
 import java.io.File
 
 class InferenceEngine(
@@ -60,6 +61,18 @@ class InferenceEngine(
         }
     }
 
+    fun classify(input: InputStream): VoiceRiskScore {
+        val bytes = input.use { it.readBytes() }
+        val samples = FloatArray(FEATURE_WINDOW_SAMPLES)
+        val sampleCount = minOf(bytes.size / 2, samples.size)
+        repeat(sampleCount) { index ->
+            val low = bytes[index * 2].toInt() and 0xff
+            val high = bytes[index * 2 + 1].toInt()
+            samples[index] = ((high shl 8) or low).toShort() / Short.MAX_VALUE.toFloat()
+        }
+        return classify(samples)
+    }
+
     private fun expectsFeatureVector(): Boolean = inputShape.contentEquals(longArrayOf(1L, 6L))
 
     private fun extractProbability(value: Any): Float {
@@ -109,6 +122,7 @@ class InferenceEngine(
 
     companion object {
         const val MODEL_ASSET = "model_q4f16.onnx"
+        private const val FEATURE_WINDOW_SAMPLES = 16_000
         private const val INTRA_OP_THREADS = 2
         private const val COPY_BUFFER_SIZE = 1024 * 1024
     }
