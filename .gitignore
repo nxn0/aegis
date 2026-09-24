@@ -1,0 +1,7 @@
+.gradle/
+build/
+app/build/
+.venv/
+.venv313/
+__pycache__/
+*.py[cod]
