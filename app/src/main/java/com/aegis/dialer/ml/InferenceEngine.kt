@@ -61,7 +61,7 @@ class InferenceEngine(
         }
     }
 
-    fun classify(input: InputStream): VoiceRiskScore {
+    fun classifyStream(input: InputStream): VoiceRiskScore {
         val bytes = input.use { it.readBytes() }
         val samples = FloatArray(FEATURE_WINDOW_SAMPLES)
         val sampleCount = minOf(bytes.size / 2, samples.size)

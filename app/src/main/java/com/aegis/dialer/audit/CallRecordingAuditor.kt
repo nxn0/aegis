@@ -2,10 +2,11 @@ package com.aegis.dialer.audit
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.core.app.NotificationCompat
-import com.aegis.dialer.MainActivity
 import com.aegis.dialer.data.VoiceRiskScore
 import com.aegis.dialer.ml.InferenceEngine
 
@@ -15,9 +16,10 @@ class CallRecordingAuditor(private val context: Context) {
         val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
         if (preferences.getString(LAST_URI, null) == recording.uri.toString()) return
         val score = runCatching {
-            InferenceEngine(context).use { engine ->
-                context.contentResolver.openInputStream(recording.uri)?.use { input ->
-                    engine.classify(input)
+            val inputStream = context.contentResolver.openInputStream(recording.uri) ?: return@runCatching null
+            inputStream.use { stream ->
+                InferenceEngine(context).use { engine ->
+                    engine.classifyStream(stream)
                 }
             }
         }.getOrNull() ?: return
@@ -34,6 +36,7 @@ class CallRecordingAuditor(private val context: Context) {
         } else {
             "No synthetic voice signature detected (${(score.probability * 100).toInt()}% confidence)."
         }
+        val contentIntent = PendingIntent.getActivity(context, uri.hashCode(), Intent(context, com.aegis.dialer.MainActivity::class.java).setData(uri), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         manager.notify(NOTIFICATION_ID, NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
@@ -41,7 +44,7 @@ class CallRecordingAuditor(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
-            .setContentIntent(MainActivity.openIntent(context, uri))
+            .setContentIntent(contentIntent)
             .build())
     }
 

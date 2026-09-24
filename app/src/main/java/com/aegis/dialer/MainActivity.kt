@@ -14,16 +14,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.aegis.dialer.audit.AuditorService
 
 class MainActivity : ComponentActivity() {
     private var permissionStatus by mutableStateOf("Checking permissions...")
@@ -33,9 +36,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestMissingPermissions()
+        ContextCompat.startForegroundService(this, Intent(this, AuditorService::class.java))
         setContent {
             MaterialTheme {
+                LaunchedEffect(Unit) { requestMissingPermissions() }
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -43,18 +47,29 @@ class MainActivity : ComponentActivity() {
                     Text("Aegis forensic auditor", style = MaterialTheme.typography.headlineMedium)
                     Text("Aegis waits for a call to end, then checks the newest system recording for synthetic voice signatures.")
                     Text(permissionStatus)
-                    Button(onClick = ::requestMissingPermissions) { Text("Grant required permissions") }
+                    Button(
+                        onClick = ::requestMissingPermissions,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Grant required permissions") }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updatePermissionStatus()
     }
 
     private fun requestMissingPermissions() {
         val missing = REQUIRED_PERMISSIONS.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray())
-        else updatePermissionStatus()
+        if (missing.isNotEmpty()) {
+            permissionLauncher.launch(missing.toTypedArray())
+        } else {
+            permissionStatus = "Auditor is ready. All required permissions are granted."
+        }
     }
 
     private fun updatePermissionStatus() {
