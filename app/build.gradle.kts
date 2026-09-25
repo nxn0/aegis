@@ -3,9 +3,30 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+import java.util.Properties
+
 android {
     namespace = "com.aegis.eidolon"
     compileSdk = 34
+
+    val signingPropertiesFile = rootProject.file("keystore.properties")
+    val signingProperties = Properties().apply {
+        if (signingPropertiesFile.exists()) {
+            signingPropertiesFile.inputStream().use(::load)
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            require(signingPropertiesFile.exists()) {
+                "Missing keystore.properties; create the local release signing setup first."
+            }
+            storeFile = rootProject.file(signingProperties.getProperty("storeFile"))
+            storePassword = signingProperties.getProperty("storePassword")
+            keyAlias = signingProperties.getProperty("keyAlias")
+            keyPassword = signingProperties.getProperty("keyPassword")
+        }
+    }
 
     defaultConfig {
         applicationId = "com.aegis.eidolon"
@@ -43,6 +64,13 @@ android {
 
     aaptOptions {
         ignoreAssetsPattern = "aegis_voice_detector.onnx:aegis_voice_detector.int8.onnx:model_bnb4(1).onnx:model.onnx"
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+        }
     }
 }
 

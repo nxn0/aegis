@@ -5,3 +5,6 @@ app/build/
 .venv313/
 __pycache__/
 *.py[cod]
+keystore.properties
+*.jks
+*.keystore
