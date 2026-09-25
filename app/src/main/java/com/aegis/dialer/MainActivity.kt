@@ -30,13 +30,15 @@ import com.aegis.dialer.audit.AuditorService
 
 class MainActivity : ComponentActivity() {
     private var permissionStatus by mutableStateOf("Checking permissions...")
+    private var permissionsGranted by mutableStateOf(false)
+    private var backgroundRunning by mutableStateOf(false)
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { updatePermissionStatus() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ContextCompat.startForegroundService(this, Intent(this, AuditorService::class.java))
+        backgroundRunning = AuditorService.isEnabled(this)
         setContent {
             MaterialTheme {
                 LaunchedEffect(Unit) { requestMissingPermissions() }
@@ -49,8 +51,15 @@ class MainActivity : ComponentActivity() {
                     Text(permissionStatus)
                     Button(
                         onClick = ::requestMissingPermissions,
+                        enabled = !permissionsGranted,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Grant required permissions") }
+                    Button(
+                        onClick = ::toggleBackground,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (backgroundRunning) "Stop running in background" else "Start running in background")
+                    }
                 }
             }
         }
@@ -59,6 +68,20 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updatePermissionStatus()
+        backgroundRunning = AuditorService.isEnabled(this)
+    }
+
+    private fun toggleBackground() {
+        if (backgroundRunning) {
+            AuditorService.setEnabled(this, false)
+            stopService(Intent(this, AuditorService::class.java))
+            backgroundRunning = false
+            finishAndRemoveTask()
+        } else {
+            AuditorService.setEnabled(this, true)
+            ContextCompat.startForegroundService(this, Intent(this, AuditorService::class.java))
+            backgroundRunning = true
+        }
     }
 
     private fun requestMissingPermissions() {
@@ -73,9 +96,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updatePermissionStatus() {
-        permissionStatus = if (REQUIRED_PERMISSIONS.all {
+        permissionsGranted = REQUIRED_PERMISSIONS.all {
                 ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-            }) "Auditor is ready." else "Phone state, audio library, and notification permissions are required."
+            }
+        permissionStatus = if (permissionsGranted) "Auditor is ready." else "Phone state, audio library, and notification permissions are required."
     }
 
     companion object {
