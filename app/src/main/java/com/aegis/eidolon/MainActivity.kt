@@ -1,4 +1,4 @@
-package com.aegis.dialer
+package com.aegis.eidolon
 
 import android.Manifest
 import android.app.PendingIntent
@@ -19,14 +19,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.aegis.dialer.audit.AuditorService
+import com.aegis.eidolon.audit.AuditorService
 
 class MainActivity : ComponentActivity() {
     private var permissionStatus by mutableStateOf("Checking permissions...")
@@ -38,15 +40,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        backgroundRunning = AuditorService.isEnabled(this)
+        backgroundRunning = AuditorService.isRunning(this)
         setContent {
-            MaterialTheme {
+            MaterialTheme(colorScheme = AegisColors.scheme) {
                 LaunchedEffect(Unit) { requestMissingPermissions() }
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Aegis forensic auditor", style = MaterialTheme.typography.headlineMedium)
+                    Text("Aegis", style = MaterialTheme.typography.headlineMedium)
                     Text("Aegis waits for a call to end, then checks the newest system recording for synthetic voice signatures.")
                     Text(permissionStatus)
                     Button(
@@ -68,7 +70,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         updatePermissionStatus()
-        backgroundRunning = AuditorService.isEnabled(this)
+        backgroundRunning = AuditorService.isRunning(this)
     }
 
     private fun toggleBackground() {
@@ -85,9 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestMissingPermissions() {
-        val missing = REQUIRED_PERMISSIONS.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
+        val missing = REQUIRED_PERMISSIONS.filter { !hasPermission(it) }
         if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
         } else {
@@ -96,10 +96,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updatePermissionStatus() {
-        permissionsGranted = REQUIRED_PERMISSIONS.all {
-                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-            }
+        permissionsGranted = hasRequiredPermissions()
         permissionStatus = if (permissionsGranted) "Auditor is ready." else "Phone state, audio library, and notification permissions are required."
+    }
+
+    private fun hasRequiredPermissions(): Boolean = REQUIRED_PERMISSIONS.all(::hasPermission)
+
+    private fun hasPermission(permission: String): Boolean =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    private fun startBackgroundService() {
+        AuditorService.setEnabled(this, true)
+        ContextCompat.startForegroundService(this, Intent(this, AuditorService::class.java))
+        backgroundRunning = true
     }
 
     companion object {
@@ -114,6 +123,21 @@ class MainActivity : ComponentActivity() {
             recordingUri.hashCode(),
             Intent(context, MainActivity::class.java).setData(recordingUri),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private object AegisColors {
+        val scheme = lightColorScheme(
+            primary = Color(0xFFB85C70),
+            onPrimary = Color(0xFFFFFFFF),
+            secondary = Color(0xFFE8A982),
+            onSecondary = Color(0xFF3D211B),
+            background = Color(0xFFFFE7D6),
+            onBackground = Color(0xFF3D211B),
+            surface = Color(0xFFFFE7D6),
+            onSurface = Color(0xFF3D211B),
+            surfaceVariant = Color(0xFFF4C7B0),
+            onSurfaceVariant = Color(0xFF5B3830)
         )
     }
 }

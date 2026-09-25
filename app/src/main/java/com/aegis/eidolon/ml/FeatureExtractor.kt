@@ -1,4 +1,4 @@
-package com.aegis.dialer.ml
+package com.aegis.eidolon.ml
 
 import kotlin.math.abs
 import kotlin.math.ln

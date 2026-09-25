@@ -1,19 +1,18 @@
-package com.aegis.dialer.ml
+package com.aegis.eidolon.ml
 
 import android.content.Context
-import com.aegis.dialer.data.VoiceRiskScore
+import com.aegis.eidolon.data.VoiceRiskScore
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
 import java.io.Closeable
-import java.io.InputStream
 import java.io.File
 
 class InferenceEngine(
     context: Context,
     private val modelAsset: String = MODEL_ASSET,
-    private val syntheticThreshold: Float = 0.85f
+    private val syntheticThreshold: Float = 0.60f
 ) : Closeable {
     private val environment = OrtEnvironment.getEnvironment()
     private val session: OrtSession
@@ -53,7 +52,7 @@ class InferenceEngine(
                 val probability = extractProbability(outputs[0].value)
                 return VoiceRiskScore(
                     probability = probability,
-                    isSynthetic = probability >= syntheticThreshold,
+                    isSynthetic = probability < syntheticThreshold,
                     windowSamples = window.size,
                     modelVersion = selectedModelAsset
                 )
@@ -61,19 +60,38 @@ class InferenceEngine(
         }
     }
 
-    fun classifyStream(input: InputStream): VoiceRiskScore {
-        val bytes = input.use { it.readBytes() }
-        val samples = FloatArray(FEATURE_WINDOW_SAMPLES)
-        val sampleCount = minOf(bytes.size / 2, samples.size)
-        repeat(sampleCount) { index ->
-            val low = bytes[index * 2].toInt() and 0xff
-            val high = bytes[index * 2 + 1].toInt()
-            samples[index] = ((high shl 8) or low).toShort() / Short.MAX_VALUE.toFloat()
+    fun classifyRecording(samples: FloatArray): VoiceRiskScore {
+        require(samples.isNotEmpty()) { "The recording contains no decodable audio" }
+        val probabilities = mutableListOf<Float>()
+        var offset = 0
+        while (offset + FEATURE_WINDOW_SAMPLES <= samples.size) {
+            val window = samples.copyOfRange(offset, offset + FEATURE_WINDOW_SAMPLES)
+            if (rootMeanSquare(window) >= MIN_VOICE_RMS) {
+                probabilities += classify(window).probability
+            }
+            offset += WINDOW_HOP_SAMPLES
         }
-        return classify(samples)
+        if (probabilities.isEmpty()) {
+            val padded = FloatArray(FEATURE_WINDOW_SAMPLES)
+            samples.copyInto(padded, endIndex = minOf(samples.size, FEATURE_WINDOW_SAMPLES))
+            probabilities += classify(padded).probability
+        }
+        val probability = probabilities.sorted()[probabilities.size / 2]
+        return VoiceRiskScore(
+            probability = probability,
+            isSynthetic = probability < syntheticThreshold,
+            windowSamples = samples.size,
+            modelVersion = selectedModelAsset
+        )
     }
 
     private fun expectsFeatureVector(): Boolean = inputShape.contentEquals(longArrayOf(1L, 6L))
+
+    private fun rootMeanSquare(samples: FloatArray): Float {
+        var energy = 0.0
+        samples.forEach { sample -> energy += sample * sample }
+        return kotlin.math.sqrt(energy / samples.size).toFloat()
+    }
 
     private fun extractProbability(value: Any): Float {
         val values = flattenOutput(value)
@@ -123,6 +141,8 @@ class InferenceEngine(
     companion object {
         const val MODEL_ASSET = "model_q4f16.onnx"
         private const val FEATURE_WINDOW_SAMPLES = 16_000
+        private const val WINDOW_HOP_SAMPLES = 8_000
+        private const val MIN_VOICE_RMS = 0.005f
         private const val INTRA_OP_THREADS = 2
         private const val COPY_BUFFER_SIZE = 1024 * 1024
     }

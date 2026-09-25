@@ -1,4 +1,4 @@
-package com.aegis.dialer.data
+package com.aegis.eidolon.data
 
 import kotlin.math.min
 

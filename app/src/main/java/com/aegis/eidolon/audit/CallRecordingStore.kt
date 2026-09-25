@@ -1,4 +1,4 @@
-package com.aegis.dialer.audit
+package com.aegis.eidolon.audit
 
 import android.content.ContentResolver
 import android.content.Context

@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.aegis.dialer"
+    namespace = "com.aegis.eidolon"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.aegis.dialer"
+        applicationId = "com.aegis.eidolon"
         minSdk = 29
         targetSdk = 34
         versionCode = 1
